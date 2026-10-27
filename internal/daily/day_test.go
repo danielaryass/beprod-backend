@@ -191,6 +191,33 @@ func TestDaily_Notes(t *testing.T) {
 	}
 }
 
+func TestDaily_NoteRequiresKindField(t *testing.T) {
+	e := setup(t)
+	tp := e.prompt(t, "Highlight", "text", 201)["id"].(string)
+	rp := e.prompt(t, "Mood", "rating", 201)["id"].(string)
+	e.putNote(t, "2026-10-26", tp, map[string]any{"text": "Kept"})
+	e.putNote(t, "2026-10-26", rp, map[string]any{"rating": 4})
+	for _, c := range []struct {
+		id, field, msg string
+		body           map[string]any
+	}{
+		{tp, "text", "Enter some text", map[string]any{}},
+		{tp, "text", "Enter some text", map[string]any{"rating": 3}},
+		{rp, "rating", "Pick 1–5", map[string]any{}},
+		{rp, "rating", "Pick 1–5", map[string]any{"text": "x"}},
+	} {
+		r := e.a.Do(t, "PUT", dailyBase+"/2026-10-26/notes/"+c.id, c.body, e.cookie)
+		if r.Status != 400 || r.Field(c.field) != c.msg {
+			t.Errorf("%s %v: %d %s", c.field, c.body, r.Status, r.Raw)
+		}
+	}
+	r := e.a.Do(t, "GET", dailyBase+"?date=2026-10-26", nil, e.cookie)
+	ps := r.Body["prompts"].([]any)
+	if ps[0].(map[string]any)["text"] != "Kept" || ps[1].(map[string]any)["rating"] != 4.0 {
+		t.Errorf("answers not kept: %v", ps)
+	}
+}
+
 func TestDaily_DateErrors(t *testing.T) {
 	e := setup(t)
 	hid := e.habit(t, validHabit(nil), 201)["id"].(string)

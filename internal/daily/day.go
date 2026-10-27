@@ -1,6 +1,7 @@
 package daily
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -214,6 +215,9 @@ func putNote(d app.Deps) fiber.Handler {
 		if err := httpx.Bind(c, &in); err != nil {
 			return err
 		}
+		// Presence check: a missing field must not clear the answer (only an explicit "" / null does).
+		var keys map[string]json.RawMessage
+		_ = json.Unmarshal(c.Body(), &keys)
 		p, err := loadPrompt(d.DB, u.ID, id)
 		if err != nil {
 			return err
@@ -222,6 +226,9 @@ func putNote(d app.Deps) fiber.Handler {
 		empty := false
 		cols := []string{"text", "rating", "updated_at"}
 		if p.Kind == models.PromptText {
+			if _, ok := keys["text"]; !ok {
+				return httpx.Validation(map[string]string{"text": "Enter some text"})
+			}
 			text := ""
 			if in.Text != nil {
 				text = strings.TrimSpace(*in.Text)
@@ -231,6 +238,9 @@ func putNote(d app.Deps) fiber.Handler {
 			}
 			entry.Text, empty = text, text == ""
 		} else {
+			if _, ok := keys["rating"]; !ok {
+				return httpx.Validation(map[string]string{"rating": "Pick 1–5"})
+			}
 			if in.Rating != nil && (*in.Rating < 1 || *in.Rating > 5) {
 				return httpx.Validation(map[string]string{"rating": "Pick 1–5"})
 			}
