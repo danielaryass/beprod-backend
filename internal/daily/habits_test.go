@@ -191,6 +191,21 @@ func TestHabits_Order(t *testing.T) {
 	}
 }
 
+func TestHabits_UnhideGoesLast(t *testing.T) {
+	e := setup(t)
+	ids := map[string]string{}
+	for _, n := range []string{"A", "B", "C"} {
+		ids[n] = e.habit(t, validHabit(map[string]any{"name": n}), 201)["id"].(string)
+	}
+	e.a.Do(t, "PATCH", habitsBase+"/"+ids["A"], map[string]any{"hidden": true}, e.cookie)
+	if r := e.a.Do(t, "PATCH", habitsBase+"/"+ids["A"], map[string]any{"hidden": false}, e.cookie); r.Status != 200 {
+		t.Fatalf("unhide: %d %s", r.Status, r.Raw)
+	}
+	if got := e.names(t, "habits"); !reflect.DeepEqual(got, []string{"B", "C", "A"}) {
+		t.Errorf("order = %v", got)
+	}
+}
+
 func TestHabits_DeleteRemovesLogs(t *testing.T) {
 	t.Skip("needs Task 4 PUT /daily route")
 	e := setup(t)

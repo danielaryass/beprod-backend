@@ -136,14 +136,14 @@ func applyHabit(tx *gorm.DB, userID uuid.UUID, h *models.Habit, in habitInput, c
 	}
 	// A new or newly unhidden habit takes an active slot.
 	if len(fields) == 0 && !h.Hidden && (create || (in.Hidden != nil && !*in.Hidden)) {
-		n, max, err := activeStats(tx, userID)
+		n, maxOrder, err := activeStats(tx, userID)
 		if err != nil {
 			return err
 		}
 		if n >= maxActiveHabits {
 			fields["name"] = "You can have up to 30 habits"
-		} else if create {
-			h.SortOrder = max + 1
+		} else {
+			h.SortOrder = maxOrder + 1 // new or newly shown: goes last
 		}
 	}
 	if len(fields) > 0 {
@@ -214,7 +214,8 @@ func updateHabit(d app.Deps) fiber.Handler {
 	}
 }
 
-func orderHabits(d app.Deps) fiber.Handler {
+// orderActive handles PUT .../order for any user-owned model with hidden and sort_order columns.
+func orderActive(d app.Deps, model any, noun string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		u := session.User(c)
 		var in struct {
@@ -224,7 +225,7 @@ func orderHabits(d app.Deps) fiber.Handler {
 			return err
 		}
 		var have []uuid.UUID
-		if err := d.DB.Model(&models.Habit{}).Where("user_id = ? AND NOT hidden", u.ID).Pluck("id", &have).Error; err != nil {
+		if err := d.DB.Model(model).Where("user_id = ? AND NOT hidden", u.ID).Pluck("id", &have).Error; err != nil {
 			return err
 		}
 		valid := len(in.IDs) == len(have)
@@ -243,11 +244,11 @@ func orderHabits(d app.Deps) fiber.Handler {
 			ids = append(ids, id)
 		}
 		if !valid {
-			return httpx.NewError(400, "INVALID_ORDER", "The list must contain each active habit exactly once")
+			return httpx.NewError(400, "INVALID_ORDER", "The list must contain each active "+noun+" exactly once")
 		}
 		err := d.DB.Transaction(func(tx *gorm.DB) error {
 			for i, id := range ids {
-				if err := tx.Model(&models.Habit{}).Where("id = ? AND user_id = ?", id, u.ID).
+				if err := tx.Model(model).Where("id = ? AND user_id = ?", id, u.ID).
 					Update("sort_order", i+1).Error; err != nil {
 					return err
 				}
