@@ -39,4 +39,8 @@ var rawIndexes = []string{
 	`CREATE INDEX IF NOT EXISTS ix_transactions_user_occurred ON transactions (user_id, occurred_at DESC)`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_users_single_super_admin ON users (role) WHERE role = 'super_admin'`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS ux_goals_active_account ON goals (account_id) WHERE status = 'active'`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ux_habit_logs_habit_date ON habit_logs (habit_id, date)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ux_note_entries_prompt_date ON note_entries (prompt_id, date)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ux_habits_user_name_active ON habits (user_id, lower(name)) WHERE NOT hidden`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS ux_note_prompts_user_label_active ON note_prompts (user_id, lower(label)) WHERE NOT hidden`,
 }

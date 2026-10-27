@@ -57,6 +57,11 @@ const (
 	GoalActive    = "active"
 	GoalCompleted = "completed"
 
+	HabitCheck   = "check"
+	HabitCount   = "count"
+	PromptText   = "text"
+	PromptRating = "rating"
+
 	AuditCreateUser    = "create_user"
 	AuditResendInvite  = "resend_invite"
 	AuditDeactivate    = "deactivate_user"
@@ -137,6 +142,50 @@ type Goal struct {
 	CompletedAt  *time.Time
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+}
+
+type Habit struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index"`
+	Name      string    `gorm:"size:40;not null"`
+	Kind      string    `gorm:"size:10;not null"`
+	Target    int       `gorm:"not null;default:0"`
+	Unit      string    `gorm:"size:12;not null;default:''"`
+	Days      int       `gorm:"not null"` // ISO weekday bitmask, bit (weekday-1)
+	SortOrder int       `gorm:"not null;default:0"`
+	Hidden    bool      `gorm:"not null;default:false"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type HabitLog struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index"`
+	HabitID   uuid.UUID `gorm:"type:uuid;not null;index"`
+	Date      time.Time `gorm:"type:date;not null"`
+	Value     int       `gorm:"not null;default:0"`
+	UpdatedAt time.Time
+}
+
+type NotePrompt struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index"`
+	Label     string    `gorm:"size:60;not null"`
+	Kind      string    `gorm:"size:10;not null"`
+	SortOrder int       `gorm:"not null;default:0"`
+	Hidden    bool      `gorm:"not null;default:false"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type NoteEntry struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index"`
+	PromptID  uuid.UUID `gorm:"type:uuid;not null;index"`
+	Date      time.Time `gorm:"type:date;not null"`
+	Text      string    `gorm:"type:text;not null;default:''"`
+	Rating    *int
+	UpdatedAt time.Time
 }
 
 type Category struct {
@@ -257,5 +306,6 @@ type QuickAddLockEvent struct {
 func All() []any {
 	return []any{&User{}, &Session{}, &UserToken{}, &LoginFailure{}, &AuditLog{},
 		&Account{}, &Category{}, &Transaction{}, &Budget{}, &BudgetLimit{},
-		&RecurringRule{}, &RecurringOccurrence{}, &QuickAddLink{}, &QuickAddSession{}, &QuickAddLockEvent{}, &Goal{}}
+		&RecurringRule{}, &RecurringOccurrence{}, &QuickAddLink{}, &QuickAddSession{}, &QuickAddLockEvent{}, &Goal{},
+		&Habit{}, &HabitLog{}, &NotePrompt{}, &NoteEntry{}}
 }
