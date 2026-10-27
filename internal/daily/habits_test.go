@@ -207,7 +207,6 @@ func TestHabits_UnhideGoesLast(t *testing.T) {
 }
 
 func TestHabits_DeleteRemovesLogs(t *testing.T) {
-	t.Skip("needs Task 4 PUT /daily route")
 	e := setup(t)
 	id := e.habit(t, validHabit(nil), 201)["id"].(string)
 	if r := e.a.Do(t, "PUT", "/api/v1/daily/2026-10-27/habits/"+id, map[string]any{"value": 1}, e.cookie); r.Status != 200 {

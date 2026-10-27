@@ -150,7 +150,6 @@ func TestPrompts_Order(t *testing.T) {
 }
 
 func TestPrompts_DeleteRemovesEntries(t *testing.T) {
-	t.Skip("needs Task 4 PUT /daily route")
 	e := setup(t)
 	id := e.prompt(t, "Mood", "rating", 201)["id"].(string)
 	if r := e.a.Do(t, "PUT", "/api/v1/daily/2026-10-27/notes/"+id, map[string]any{"rating": 4}, e.cookie); r.Status != 200 {

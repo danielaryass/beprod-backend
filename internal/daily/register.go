@@ -22,4 +22,9 @@ func Register(api fiber.Router, d app.Deps) {
 	p.Put("/order", orderActive(d, func() any { return &models.NotePrompt{} }, "prompt")) // before /:id
 	p.Patch("/:id", updatePrompt(d))
 	p.Delete("/:id", deletePrompt(d))
+
+	day := api.Group("/daily", session.Require(d))
+	day.Get("/", getDaily(d))
+	day.Put("/:date/habits/:id", putHabitLog(d))
+	day.Put("/:date/notes/:id", putNote(d))
 }
