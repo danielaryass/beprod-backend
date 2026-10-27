@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: beprod
+      POSTGRES_PASSWORD: beprod
+      POSTGRES_DB: beprod
+    ports: ["5434:5432"]
+    volumes: [beprod-db:/var/lib/postgresql/data]
+  db-test:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: beprod
+      POSTGRES_PASSWORD: beprod
+      POSTGRES_DB: beprod_test
+    ports: ["5433:5432"]
+    tmpfs: [/var/lib/postgresql/data]
+volumes:
+  beprod-db: {}
