@@ -71,7 +71,11 @@ type fixture struct {
 	Occ        string
 	Note       string
 	Tag        string
+	Habit      string
+	Prompt     string
 }
+
+const fixtureDay = "2026-10-20" // tanggal Jakarta dari fixedNow
 
 func buildFixture(t *testing.T, a *testutil.TestApp, cookie, prefix string) fixture {
 	t.Helper()
@@ -98,12 +102,17 @@ func buildFixture(t *testing.T, a *testutil.TestApp, cookie, prefix string) fixt
 		t.Fatal("no pending occurrence")
 	}
 	f.Occ, _ = due[0].(map[string]any)["id"].(string)
+	f.Habit = dig(t, post("habits", map[string]any{"name": prefix + " Water", "kind": "check", "days": []int{1, 2, 3, 4, 5, 6, 7}}, "habit"), "habit", "id")
+	f.Prompt = dig(t, post("note-prompts", map[string]any{"label": prefix + " Mood", "kind": "rating"}, "prompt"), "prompt", "id")
+	must(t, a.Do(t, "PUT", "/api/v1/daily/"+fixtureDay+"/habits/"+f.Habit, map[string]any{"value": 1}, cookie), 200, "log habit")
+	must(t, a.Do(t, "PUT", "/api/v1/daily/"+fixtureDay+"/notes/"+f.Prompt, map[string]any{"rating": 3}, cookie), 200, "answer prompt")
 	return f
 }
 
 func (f fixture) ids() []string {
 	return []string{f.Goal, f.Pocket, f.Prefix + " Laptop", f.Prefix + " Pocket", f.Acc1, f.Acc2, f.Cat, f.Tx, f.Budget, f.Rule, f.Occ,
-		f.Prefix + " Cash", f.Prefix + " Bank", f.Prefix + " Food", f.Note, f.Tag}
+		f.Prefix + " Cash", f.Prefix + " Bank", f.Prefix + " Food", f.Note, f.Tag,
+		f.Habit, f.Prompt, f.Prefix + " Water", f.Prefix + " Mood"}
 }
 
 func world(t *testing.T) (a *testutil.TestApp, A, B fixture) {
@@ -152,6 +161,19 @@ func assertUntouched(t *testing.T, a *testutil.TestApp, A fixture) {
 	if o := hasID(list(t, rec, "due"), A.Occ); o == nil || o["status"] != "pending" {
 		t.Errorf("A occurrence changed: %v", o)
 	}
+	if h := hasID(list(t, get("habits"), "habits"), A.Habit); h == nil || h["name"] != "A Water" {
+		t.Errorf("A habit changed or missing: %v", h)
+	}
+	if p := hasID(list(t, get("note-prompts"), "prompts"), A.Prompt); p == nil || p["label"] != "A Mood" {
+		t.Errorf("A prompt changed or missing: %v", p)
+	}
+	day := get("daily?date=" + fixtureDay)
+	if h := hasID(list(t, day, "habits"), A.Habit); h == nil || h["value"] != float64(1) {
+		t.Errorf("A daily habit value changed: %v", h)
+	}
+	if p := hasID(list(t, day, "prompts"), A.Prompt); p == nil || p["rating"] != float64(3) {
+		t.Errorf("A daily prompt rating changed: %v", p)
+	}
 }
 
 func TestIsolation_ForeignIDsReturn404(t *testing.T) {
@@ -179,6 +201,12 @@ func TestIsolation_ForeignIDsReturn404(t *testing.T) {
 	}
 	occ := func(suffix string) func(A, B fixture) string {
 		return func(A, B fixture) string { return "/api/v1/recurring/occurrences/" + A.Occ + suffix }
+	}
+	habit := func(suffix string) func(A, B fixture) string {
+		return func(A, B fixture) string { return "/api/v1/habits/" + A.Habit + suffix }
+	}
+	prompt := func(suffix string) func(A, B fixture) string {
+		return func(A, B fixture) string { return "/api/v1/note-prompts/" + A.Prompt + suffix }
 	}
 	tx := func(A, B fixture) string { return "/api/v1/transactions/" + A.Tx }
 	none := func(A, B fixture) any { return nil }
@@ -213,6 +241,12 @@ func TestIsolation_ForeignIDsReturn404(t *testing.T) {
 		{"goals delete", "DELETE", goal(""), none},
 		{"occurrence confirm", "POST", occ("/confirm"), lit(map[string]any{})},
 		{"occurrence skip", "POST", occ("/skip"), none},
+		{"habits patch", "PATCH", habit(""), lit(map[string]any{"name": "hacked"})},
+		{"habits delete", "DELETE", habit(""), none},
+		{"note-prompts patch", "PATCH", prompt(""), lit(map[string]any{"label": "hacked"})},
+		{"note-prompts delete", "DELETE", prompt(""), none},
+		{"daily log habit", "PUT", func(A, B fixture) string { return "/api/v1/daily/" + fixtureDay + "/habits/" + A.Habit }, lit(map[string]any{"value": 1})},
+		{"daily answer prompt", "PUT", func(A, B fixture) string { return "/api/v1/daily/" + fixtureDay + "/notes/" + A.Prompt }, lit(map[string]any{"rating": 5})},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -235,6 +269,14 @@ func TestIsolation_OrderEndpointsRejectForeignIDs(t *testing.T) {
 	r = a.Do(t, "PUT", "/api/v1/categories/order", map[string]any{"type": "expense", "ids": []string{A.Cat}}, B.Cookie)
 	if r.Status != 400 || r.ErrCode() != "INVALID_ORDER" {
 		t.Errorf("LEAK: PUT /categories/order -> %d %s (want 400 INVALID_ORDER)", r.Status, string(r.Raw))
+	}
+	r = a.Do(t, "PUT", "/api/v1/habits/order", map[string]any{"ids": []string{B.Habit, A.Habit}}, B.Cookie)
+	if r.Status != 400 || r.ErrCode() != "INVALID_ORDER" {
+		t.Errorf("LEAK: PUT /habits/order -> %d %s (want 400 INVALID_ORDER)", r.Status, string(r.Raw))
+	}
+	r = a.Do(t, "PUT", "/api/v1/note-prompts/order", map[string]any{"ids": []string{B.Prompt, A.Prompt}}, B.Cookie)
+	if r.Status != 400 || r.ErrCode() != "INVALID_ORDER" {
+		t.Errorf("LEAK: PUT /note-prompts/order -> %d %s (want 400 INVALID_ORDER)", r.Status, string(r.Raw))
 	}
 	assertUntouched(t, a, A)
 	r = a.Do(t, "GET", "/api/v1/accounts", nil, A.Cookie)
@@ -366,6 +408,19 @@ func TestIsolation_ListsDoNotLeak(t *testing.T) {
 		t.Errorf("B dashboard balance = %v, want total 95000", r.Body["balance"])
 	}
 
+	r = get(B.Cookie, "/api/v1/habits")
+	if hs := list(t, r, "habits"); len(hs) != 1 || hasID(hs, B.Habit) == nil {
+		t.Errorf("B habits wrong: %s", string(r.Raw))
+	}
+	r = get(B.Cookie, "/api/v1/note-prompts")
+	if ps := list(t, r, "prompts"); len(ps) != 1 || hasID(ps, B.Prompt) == nil {
+		t.Errorf("B prompts wrong: %s", string(r.Raw))
+	}
+	r = get(B.Cookie, "/api/v1/daily?date="+fixtureDay)
+	if hs, ps := list(t, r, "habits"), list(t, r, "prompts"); len(hs) != 1 || hasID(hs, B.Habit) == nil || len(ps) != 1 || hasID(ps, B.Prompt) == nil {
+		t.Errorf("B daily wrong: %s", string(r.Raw))
+	}
+
 	_, cc := a.NewUser(t, "c@example.com")
 	r = get(cc, "/api/v1/accounts")
 	if n := len(list(t, r, "accounts")); n != 0 {
@@ -444,7 +499,7 @@ func TestIsolation_AdminListLeaksNoFinancialData(t *testing.T) {
 	r := a.Do(t, "GET", "/api/v1/admin/users", nil, ck)
 	must(t, r, 200, "admin: GET /admin/users")
 	walk(t, r.Body, "$")
-	for _, s := range []string{A.Note, A.Tag, "A Cash", "A Food"} {
+	for _, s := range []string{A.Note, A.Tag, "A Cash", "A Food", A.Prefix + " Water", A.Prefix + " Mood"} {
 		if strings.Contains(string(r.Raw), s) {
 			t.Errorf("admin response contains %q", s)
 		}

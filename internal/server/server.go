@@ -7,6 +7,7 @@ import (
 	"beprod/internal/auth"
 	"beprod/internal/budgets"
 	"beprod/internal/categories"
+	"beprod/internal/daily"
 	"beprod/internal/dashboard"
 	"beprod/internal/goals"
 	"beprod/internal/httpx"
@@ -35,5 +36,6 @@ func New(d app.Deps) *fiber.App {
 	quickadd.Register(api, d)
 	goals.Register(api, d)
 	plan.Register(api, d)
+	daily.Register(api, d)
 	return f
 }
